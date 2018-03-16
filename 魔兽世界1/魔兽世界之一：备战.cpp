@@ -2,7 +2,7 @@
 //  main.cpp
 //  Cpp Program
 //
-//  Created by 尹晨桥 on 2018/3/8.
+//  Created by 尹晨桥 on 2018/3/12.
 //  Copyright © 2018年 尹晨桥. All rights reserved.
 //
 
@@ -17,8 +17,7 @@ void PrintWarName(int t) {
         case 2: cout << "iceman "; break;
         case 3: cout << "lion "; break;
         case 4: cout << "wolf "; break;
-        default:
-            break;
+        default: break;
     }
 }
 
@@ -51,26 +50,26 @@ public:
     }
     bool MakeWarrior(int time, int *elements) {
         if (stop) return false;
-        int i;
+        int i, tmp;
         printf("%03d ", time);
         if (type) cout << "blue ";
         else cout << "red ";
         for (i = 0; i < 5; i++) {
-            if (elements[order[(now+i)%5]] <= element) {
-                warriors[WarNum] = new Warrior(order[(now+i)%5], elements[order[(now+i)%5]]);
-                element -= elements[order[(now+i)%5]];
-                WarNum++; count[order[(now+i)%5]]++;
-                PrintWarName(order[(now+i)%5]);
-                cout << WarNum << ' ';
+            tmp = order[(now+i)%5];
+            if (elements[tmp] <= element) {
+                warriors[WarNum] = new Warrior(tmp, elements[tmp]);
+                element -= elements[tmp];
+                count[tmp]++;
+                PrintWarName(tmp);
+                cout << ++WarNum << ' ';
                 cout << "born with strength ";
                 cout << warriors[WarNum-1] -> strength << ',';
-                cout << count[order[(now+i)%5]] << ' ';
-                PrintWarName(order[(now+i)%5]);
+                cout << count[tmp] << ' ';
+                PrintWarName(tmp);
                 cout << "in ";
                 if (type) cout << "blue ";
                 else cout << "red ";
                 cout << "headquarter" << endl;
-                
                 now = (now + i + 1) % 5;
                 return true;
             }
@@ -86,23 +85,22 @@ public:
 int main() {
     int cases, m, elements[5], time;
     int order_red[5] = {2, 3, 4, 1, 0}, order_blue[5] = {3, 0, 1, 2, 4};
-    bool redmake, bluemake;
     cin >> cases;
     for (int j = 1; j <= cases; j++) {
         cout << "Case:" << j << endl;
-        time = 0; redmake = bluemake = true;
+        time = 0;
         cin >> m;
         for (int i = 0; i < 5; i++) {
             cin >> elements[i];
         }
         HeadQuarter red(m, order_red), blue(m, order_blue);
         red.type = 0; blue.type = 1;
-        while (redmake || bluemake) {
-            redmake = red.MakeWarrior(time, elements);
-            bluemake = blue.MakeWarrior(time, elements);
+        while (!red.stop || !blue.stop) {
+            red.MakeWarrior(time, elements);
+            blue.MakeWarrior(time, elements);
             time++;
         }
     }
-    
     return 0;
 }
+
