@@ -55,21 +55,20 @@ City cities[30];
 class Weapon {
 public:
     int type;
-    int force;
-    Weapon(int t, int f): type(t), force(f) {}
+    Weapon(int t): type(t) {}
 };
 class Sword: public Weapon {
 public:
-    Sword(int t, int f): Weapon(t, f * 2 / 10) {}
+    Sword(int t): Weapon(t) {}
 };
 class Bomb: public Weapon {
 public:
-    Bomb(int t, int f): Weapon(t, f * 4 / 10) {}
+    Bomb(int t): Weapon(t) {}
 };
 class Arrow: public Weapon {
 public:
     int use;
-    Arrow(int t, int f): Weapon(t, f * 3 / 10) {
+    Arrow(int t): Weapon(t) {
         use = 2;
     }
 };
@@ -88,7 +87,7 @@ public:
     void Attack(Warrior *enemy, int time);
     void ReportWp(int time);
     void SortWp();
-    void MakeWeapon(int t, int force);
+    void MakeWeapon(int t);
     bool FindNextWp(int *typenow, int *idnow);
     void UseWeapon(Warrior *enemy, int typenow, int idnow);
     void WarWin(Warrior *enemy, int time);
@@ -161,18 +160,18 @@ public:
 
 
 Dragon::Dragon(int t, int s, HeadQuarter *hq, int force):Warrior(t, s, hq, force) {
-    MakeWeapon(id % 3, force);
+    MakeWeapon(id % 3);
 }
 Ninja::Ninja(int t, int s, HeadQuarter *hq, int force):Warrior(t, s, hq, force) {
-    MakeWeapon(id % 3, force);
-    MakeWeapon((id + 1) % 3, force);
+    MakeWeapon(id % 3);
+    MakeWeapon((id + 1) % 3);
 }
 Iceman::Iceman(int t, int s, HeadQuarter *hq, int force):Warrior(t, s, hq, force) {
-    MakeWeapon(id % 3, force);
+    MakeWeapon(id % 3);
 }
 Lion::Lion(int t, int s, HeadQuarter *hq, int force):Warrior(t, s, hq, force) {
     loyalty = hq -> element - s;
-    MakeWeapon(id % 3, force);
+    MakeWeapon(id % 3);
 }
 Wolf::Wolf(int t, int s, HeadQuarter *hq, int force):Warrior(t, s, hq, force) {}
 
@@ -246,9 +245,14 @@ bool Warrior::FindNextWp(int *typenow, int *idnow) {
     return false;
 }
 void Warrior::UseWeapon(Warrior *enemy, int typenow, int idnow) {
-    enemy -> strength -= weapon[typenow][idnow] -> force;
+    switch (typenow) {
+        case 0: {enemy -> strength -= force * 2 / 10; break;}
+        case 1: {enemy -> strength -= force * 4 / 10; break;}
+        case 2: {enemy -> strength -= force * 3 / 10; break;}
+    }
+    //enemy -> strength -= weapon[typenow][idnow] -> force;
     if (typenow == 1) {
-        if (type != 1) strength -= weapon[1][idnow] -> force / 2;
+        if (type != 1) strength -= force * 2 / 10;
         for (int i = idnow + 1; i < nWeapon[1]; i++) {
             weapon[1][i-1] = weapon[1][i];
         }
@@ -304,6 +308,10 @@ void Warrior::Attack(Warrior *enemy, int time) {
                     break;
                 }
             }
+            else if (strength <= 0 && enemy -> strength > 0) {
+                enemy -> WarWin(this, time);
+                break;
+            }
         }
         if (enemy -> FindNextWp(&typenow[1], &idnow[1])) {
             enemy -> UseWeapon(this, typenow[1], idnow[1]);
@@ -316,6 +324,10 @@ void Warrior::Attack(Warrior *enemy, int time) {
                     enemy -> WarWin(this, time);
                     break;
                 }
+            }
+            else if (enemy -> strength <= 0 && strength > 0) {
+                WarWin(enemy, time);
+                break;
             }
         }
         if (strength == hpnow[0] && enemy -> strength == hpnow[1]) count++;
@@ -331,18 +343,18 @@ void Warrior::ReportWp(int time) {
     PrintWarInfo(this);
     printf("has %d sword %d bomb %d arrow and %d elements\n", nWeapon[0], nWeapon[1], nWeapon[2], strength);
 }
-void Warrior::MakeWeapon(int t, int force) {
+void Warrior::MakeWeapon(int t) {
     switch (t) {
         case 0: {
-            weapon[0][nWeapon[0]++] = new Sword(0, force);
+            weapon[0][nWeapon[0]++] = new Sword(0);
             return;
         }
         case 1: {
-            weapon[1][nWeapon[1]++] = new Bomb(0, force);
+            weapon[1][nWeapon[1]++] = new Bomb(1);
             return;
         }
         case 2: {
-            weapon[2][nWeapon[2]++] = new Arrow(0, force);
+            weapon[2][nWeapon[2]++] = new Arrow(2);
             return;
         }
     }
@@ -492,7 +504,7 @@ void BothAlive(Warrior *war1, Warrior *war2, int time) {
 }
 void BothDead(Warrior *war1, Warrior *war2, int time) {
     printf("%03d:40 both ", time);
-    if (war1 -> type == 0) {
+    if (war1 -> hq -> type == 0) {
         PrintWarInfo(war1);
         printf("and ");
         PrintWarInfo(war2);
