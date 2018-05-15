@@ -10,6 +10,7 @@
 #include <cassert>
 #include <cstring> // 注意memset是cstring里的
 #include <algorithm>
+#include <map>
 #include "jsoncpp/json.h" // 在平台上，C++编译时默认包含此库
 
 using std::vector;
@@ -17,6 +18,8 @@ using std::sort;
 using std::unique;
 using std::set;
 using std::string;
+using std::cout;
+using std::endl;
 
 constexpr int PLAYER_COUNT = 3;
 
@@ -129,6 +132,12 @@ struct CardCombo
                 return level > b.level;
             return count > b.count;
         }
+        // 增加CardPack的输出函数以供调试 by尹晨桥 on5.15
+        friend std::ostream & operator<< (std::ostream &os, CardPack &p) {
+            os << "(" << p.level << "," << p.count << ") ";
+            return os;
+        }
+        // end
     };
     vector<Card> cards; // 原始的牌，未排序
     vector<CardPack> packs; // 按数目和大小排序的牌种
@@ -373,16 +382,111 @@ struct CardCombo
         return b.comboType == comboType && b.cards.size() == cards.size() && b.comboLevel > comboLevel;
     }
 
+    // 寻找最小的不需要拆牌的单张
+    // by尹晨桥 5.15
+    template <typename CARD_ITERATOR>
+    std::pair<bool, CardCombo> findFirstSingle(CARD_ITERATOR begin, CARD_ITERATOR end) {
+        auto deck = vector<Card>(begin, end); // 手牌
+        short counts[MAX_LEVEL + 1] = {};
+        for (Card c : deck)
+            counts[card2level(c)]++;
+
+        int firstvalid = 0;
+        for (; firstvalid <= MAX_LEVEL; ++firstvalid) {
+            if (counts[firstvalid] == 1) break;
+        }
+        if (firstvalid == MAX_LEVEL + 1) return std::make_pair(false, CardCombo());
+
+        vector<Card> solve;
+        for (Card c : deck)
+        {
+            Level level = card2level(c);
+            if (level == firstvalid)
+            {
+                solve.push_back(c);
+                break;
+            }
+        }
+        return std::make_pair(true, CardCombo(solve.begin(), solve.end()));
+    };
+
+    // 寻找最小的不需要拆牌的对子
+    // by尹晨桥 5.15
+    template <typename CARD_ITERATOR>
+    std::pair<bool, CardCombo> findFirstPair(CARD_ITERATOR begin, CARD_ITERATOR end) {
+        auto deck = vector<Card>(begin, end); // 手牌
+        short counts[MAX_LEVEL + 1] = {};
+        for (Card c : deck)
+            counts[card2level(c)]++;
+
+        /*for (int i = 0; i < MAX_LEVEL; ++i) {
+            cout << counts[i] << " ";
+        }
+        cout << endl;*/
+
+        int firstvalid = 0;
+        for (; firstvalid < level_joker; ++firstvalid) {
+            if (counts[firstvalid] == 2) break;
+        }
+        if (firstvalid == level_joker) return std::make_pair(false, CardCombo());
+
+        vector<Card> solve;
+        int need = 2;
+        for (Card c : deck)
+        {
+            Level level = card2level(c);
+            if (level == firstvalid)
+            {
+                solve.push_back(c);
+                need--;
+                if (need == 0) break;
+            }
+        }
+        return std::make_pair(true, CardCombo(solve.begin(), solve.end()));
+    };
+
     /**
      * 从指定手牌中寻找第一个能大过当前牌组的牌组
      * 如果随便出的话只出第一张
      * 如果不存在则返回一个PASS的牌组
      */
     template <typename CARD_ITERATOR>
-    CardCombo findFirstValid(CARD_ITERATOR begin, CARD_ITERATOR end) const
+    CardCombo findFirstValid(CARD_ITERATOR begin, CARD_ITERATOR end)
     {
+        /*for (auto i = begin; i != end; ++i) {
+            cout << *i << " ";
+        }
+        cout << endl;*/
         if (comboType == CardComboType::PASS) // 如果不需要大过谁，只需要随便出
         {
+            // 修改随便出的算法，如果剩余的牌能凑成一种牌型，就全部出掉
+            // by尹晨桥 5.15
+            CardCombo nowCombo = CardCombo(begin, end);
+            if (nowCombo.comboType != CardComboType::INVALID) return nowCombo;
+
+            // 修改随便出的算法，如果存在不需要拆牌的单张和对子，就出一个最小的单张或对子
+            // by尹晨桥 5.15
+            auto Single = findFirstSingle(begin, end);
+            auto Pair = findFirstPair(begin, end);
+            if (Single.first == true && Pair.first == false) {
+                //cout << "have single" << endl;
+                return Single.second;
+            }
+            if (Single.first == false && Pair.first == true) {
+                //cout << "have pair" << endl;
+                return Pair.second;
+            }
+            if (Single.first == true && Pair.first == true) {
+                //cout << "have single and pair" << endl;
+                //cout << "single: " << *Single.second.cards.begin() << endl;
+                //cout << "pair: " << *Pair.second.cards.begin() << endl;
+                if (*Single.second.cards.begin() < *Pair.second.cards.begin())
+                    return Single.second;
+                return Pair.second;
+            }
+            // end
+
+
             CARD_ITERATOR second = begin;
             second++;
             return CardCombo(begin, second); // 那么就出第一张牌……
@@ -512,8 +616,8 @@ struct CardCombo
     void debugPrint()
     {
 #ifndef _BOTZONE_ONLINE
-        std::cout << "【" << cardComboStrings[(int)comboType] <<
-                  "共" << cards.size() << "张，大小序" << comboLevel << "】";
+        cout << "【" << cardComboStrings[(int)comboType] <<
+                  "共" << cards.size() << "张，大小序" << comboLevel << "】" << endl;
 #endif
     }
 };
@@ -640,6 +744,7 @@ int main()
 
     // findFirstValid 函数可以用作修改的起点
     CardCombo myAction = lastValidCombo.findFirstValid(myCards.begin(), myCards.end());
+    //myAction.debugPrint();
 
     // 是合法牌
     assert(myAction.comboType != CardComboType::INVALID);
