@@ -487,6 +487,22 @@ struct CardCombo
                 default: break;
             }
         }
+        /*cout << "single: ";
+        for (auto i = tmp.single.begin(); i != tmp.single.end(); ++i)
+            cout << *i << " ";
+        cout << endl;
+        cout << "pair: ";
+        for (auto i = tmp.pair.begin(); i != tmp.pair.end(); ++i)
+            cout << *i << " ";
+        cout << endl;
+        cout << "triplet: ";
+        for (auto i = tmp.triplet.begin(); i != tmp.triplet.end(); ++i)
+            cout << *i << " ";
+        cout << endl;
+        cout << "bomb: ";
+        for (auto i = tmp.bomb.begin(); i != tmp.bomb.end(); ++i)
+            cout << *i << " ";
+        cout << endl;*/
         return tmp;
     }
 

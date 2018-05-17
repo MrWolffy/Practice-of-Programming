@@ -82,9 +82,6 @@
 				</MakeCommands>
 			</Target>
 		</Build>
-		<Unit filename="/Users/yinchenqiao/Documents/GitHub/Practice-of-Programming/FightTheLandlord/decision.h">
-			<Option target="FightTheLandlord"/>
-		</Unit>
 		<Unit filename="/Users/yinchenqiao/Documents/GitHub/Practice-of-Programming/FightTheLandlord/main.cpp">
 			<Option target="FightTheLandlord"/>
 		</Unit>
