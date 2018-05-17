@@ -20,6 +20,7 @@ using std::set;
 using std::string;
 using std::cout;
 using std::endl;
+using std::pair;
 
 constexpr int PLAYER_COUNT = 3;
 
@@ -385,7 +386,7 @@ struct CardCombo
     // 寻找最小的不需要拆牌的单张
     // by尹晨桥 5.15
     template <typename CARD_ITERATOR>
-    std::pair<bool, CardCombo> findFirstSingle(CARD_ITERATOR begin, CARD_ITERATOR end) {
+    pair<bool, CardCombo> findFirstSingle(CARD_ITERATOR begin, CARD_ITERATOR end) {
         auto deck = vector<Card>(begin, end); // 手牌
         short counts[MAX_LEVEL + 1] = {};
         for (Card c : deck)
@@ -413,7 +414,7 @@ struct CardCombo
     // 寻找最小的不需要拆牌的对子
     // by尹晨桥 5.15
     template <typename CARD_ITERATOR>
-    std::pair<bool, CardCombo> findFirstPair(CARD_ITERATOR begin, CARD_ITERATOR end) {
+    pair<bool, CardCombo> findFirstPair(CARD_ITERATOR begin, CARD_ITERATOR end) {
         auto deck = vector<Card>(begin, end); // 手牌
         short counts[MAX_LEVEL + 1] = {};
         for (Card c : deck)
@@ -445,6 +446,50 @@ struct CardCombo
         return std::make_pair(true, CardCombo(solve.begin(), solve.end()));
     };
 
+    // 最简单的拆牌算法的返回值
+    // by尹晨桥 5.17
+    struct levels {
+        vector<Level> single;
+        vector<Level> pair;
+        vector<Level> triplet;
+        vector<Level> bomb;
+    };
+
+    // 增加最简单的拆牌算法，将每一个level的牌作为一类
+    // by尹晨桥 5.17
+    template <typename CARD_ITERATOR>
+    struct levels levelCount_naive (CARD_ITERATOR begin, CARD_ITERATOR end) {
+        auto deck = vector<Card>(begin, end); // 手牌
+        short counts[MAX_LEVEL + 1] = {};
+        for (Card c : deck)
+            counts[card2level(c)]++;
+
+        levels tmp;
+        short level_iterator = 0;
+        for (; level_iterator < MAX_LEVEL; ++level_iterator) {
+            switch (counts[level_iterator]) {
+                case 1: {
+                    tmp.single.push_back(level_iterator);
+                    break;
+                }
+                case 2: {
+                    tmp.pair.push_back(level_iterator);
+                    break;
+                }
+                case 3: {
+                    tmp.triplet.push_back(level_iterator);
+                    break;
+                }
+                case 4: {
+                    tmp.bomb.push_back(level_iterator);
+                    break;
+                }
+                default: break;
+            }
+        }
+        return tmp;
+    }
+
     /**
      * 从指定手牌中寻找第一个能大过当前牌组的牌组
      * 如果随便出的话只出第一张
@@ -457,6 +502,11 @@ struct CardCombo
             cout << *i << " ";
         }
         cout << endl;*/
+
+        // 增加最简单的拆牌算法
+        // by尹晨桥 5.15
+        auto levelCount = levelCount_naive(begin, end);
+
         if (comboType == CardComboType::PASS) // 如果不需要大过谁，只需要随便出
         {
             // 修改随便出的算法，如果剩余的牌能凑成一种牌型，就全部出掉
@@ -464,6 +514,7 @@ struct CardCombo
             CardCombo nowCombo = CardCombo(begin, end);
             if (nowCombo.comboType != CardComboType::INVALID) return nowCombo;
 
+            
             // 修改随便出的算法，如果存在不需要拆牌的单张和对子，就出一个最小的单张或对子
             // by尹晨桥 5.15
             auto Single = findFirstSingle(begin, end);
