@@ -453,18 +453,21 @@ struct CardCombo
         vector<Level> pair;
         vector<Level> triplet;
         vector<Level> bomb;
+        int countEachLevel[MAX_LEVEL + 1];
     };
 
     // 增加最简单的拆牌算法，将每一个level的牌作为一类
     // by尹晨桥 5.17
     template <typename CARD_ITERATOR>
-    struct levels levelCount_naive (CARD_ITERATOR begin, CARD_ITERATOR end) {
+    levels levelCount_naive (CARD_ITERATOR begin, CARD_ITERATOR end) {
         auto deck = vector<Card>(begin, end); // 手牌
         short counts[MAX_LEVEL + 1] = {};
+        memset(counts, 0, sizeof(counts));
         for (Card c : deck)
             counts[card2level(c)]++;
 
         levels tmp;
+        memcpy(tmp.countEachLevel, counts, sizeof(counts));
         short level_iterator = 0;
         for (; level_iterator < MAX_LEVEL; ++level_iterator) {
             switch (counts[level_iterator]) {
@@ -502,7 +505,10 @@ struct CardCombo
         cout << "bomb: ";
         for (auto i = tmp.bomb.begin(); i != tmp.bomb.end(); ++i)
             cout << *i << " ";
-        cout << endl;*/
+        cout << endl;
+        for (int i = 0; i <= MAX_LEVEL; ++i) {
+            cout << "level: " << i << ", count: " << counts[i] << endl;
+        }*/
         return tmp;
     }
 
@@ -530,7 +536,7 @@ struct CardCombo
             CardCombo nowCombo = CardCombo(begin, end);
             if (nowCombo.comboType != CardComboType::INVALID) return nowCombo;
 
-            
+
             // 修改随便出的算法，如果存在不需要拆牌的单张和对子，就出一个最小的单张或对子
             // by尹晨桥 5.15
             auto Single = findFirstSingle(begin, end);
@@ -684,7 +690,7 @@ struct CardCombo
     {
 #ifndef _BOTZONE_ONLINE
         cout << "【" << cardComboStrings[(int)comboType] <<
-                  "共" << cards.size() << "张，大小序" << comboLevel << "】" << endl;
+             "共" << cards.size() << "张，大小序" << comboLevel << "】" << endl;
 #endif
     }
 };
