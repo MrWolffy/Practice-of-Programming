@@ -109,6 +109,23 @@ constexpr Level MAX_STRAIGHT_LEVEL = 11;
 constexpr Level level_joker = 13;
 constexpr Level level_JOKER = 14;
 
+// 我的牌有哪些
+set<Card> myCards;
+
+// 地主被明示的牌有哪些
+set<Card> landlordPublicCards;
+
+// 大家从最开始到现在都出过什么
+vector<vector<Card>> whatTheyPlayed[PLAYER_COUNT];
+
+// 大家还剩多少牌
+short cardRemaining[PLAYER_COUNT] = { 20, 17, 17 };
+
+// 我是几号玩家（0-地主，1-农民甲，2-农民乙）
+int myPosition;
+
+
+
 /**
  * 将Card变成Level
  */
@@ -133,7 +150,8 @@ struct CardCombo
                 return level > b.level;
             return count > b.count;
         }
-        // 增加CardPack的输出函数以供调试 by尹晨桥 on5.15
+        // 增加CardPack的输出函数以供调试
+        // by尹晨桥 5.15
         friend std::ostream & operator<< (std::ostream &os, CardPack &p) {
             os << "(" << p.level << "," << p.count << ") ";
             return os;
@@ -512,6 +530,19 @@ struct CardCombo
         return tmp;
     }
 
+    // 增加从level产生牌组的函数
+    // by尹晨桥 5.19
+    CardCombo makeCardComboFromLevel (Level l, int count) {
+        vector<Card> tmp;
+        for (auto i = myCards.begin(); i != myCards.end() && count > 0; ++i) {
+            if (card2level(*i) == l) {
+                tmp.push_back(*i);
+                --count;
+            }
+        }
+        return CardCombo(tmp.begin(), tmp.end());
+    }
+
     /**
      * 从指定手牌中寻找第一个能大过当前牌组的牌组
      * 如果随便出的话只出第一张
@@ -564,6 +595,69 @@ struct CardCombo
             second++;
             return CardCombo(begin, second); // 那么就出第一张牌……
         }
+
+        // 增加农民乙不能管农民甲的判断
+        // by尹晨桥 5.19
+        if (myPosition == 2) {
+
+            // 炸弹不管
+            if (comboType == CardComboType::BOMB) return CardCombo();
+
+            // 地主不要，农民甲要，农民乙不管
+            // 除非农民乙的手牌数比农民甲小，或者农民甲出的牌比较小（不带人）
+            if (whatTheyPlayed[0].end() -> empty()
+                && !(whatTheyPlayed[1].end() -> empty())
+                && cardRemaining[1] > cardRemaining[2]
+                && comboLevel >= 8) {
+                return CardCombo();
+            }
+
+            // 农民甲出的牌已经比较大了，农民乙不管
+            if (comboLevel >= MAX_STRAIGHT_LEVEL) return CardCombo();
+        }
+
+        // 增加农民甲不管农民乙的判断
+        // by尹晨桥 5.19
+        if (myPosition == 1) {
+            CardCombo tmp = CardCombo((--whatTheyPlayed[2].end()) -> begin(), (--whatTheyPlayed[2].end()) -> end());
+            // 如果地主没出，农民乙出的牌已经比较大了，农民甲不管
+            if (whatTheyPlayed[0].end() -> empty() && tmp.comboLevel >= MAX_STRAIGHT_LEVEL)
+                return CardCombo();
+        }
+
+        // 增加跟牌时不拆牌的判断
+        // by尹晨桥 5.19
+        if (comboType == CardComboType::SINGLE) {
+            for (auto i = levelCount.single.begin(); i != levelCount.single.end(); ++i) {
+                if (*i > card2level(cards[0])) {
+                    return makeCardComboFromLevel(*i, 1);
+                }
+            }
+            for (auto i = levelCount.pair.begin(); i != levelCount.pair.end(); ++i) {
+                if (*i > card2level(cards[0])) {
+                    return makeCardComboFromLevel(*i, 1);
+                }
+            }
+            return CardCombo();
+        }
+        if (comboType == CardComboType::PAIR) {
+            for (auto i = levelCount.pair.begin(); i != levelCount.pair.end(); ++i) {
+                if (*i > card2level(cards[0])) {
+                    return makeCardComboFromLevel(*i, 2);
+                }
+            }
+            if ((myPosition == 0 && cardRemaining[1] <= 6 && cardRemaining[2] <= 6) ||
+                    (myPosition == 1 && cardRemaining[0] <= 6) ||
+                    (myPosition == 2 && cardRemaining[0] <= 6)) {
+                for (auto i = levelCount.triplet.begin(); i != levelCount.triplet.end(); ++i) {
+                    if (*i > card2level(cards[0])) {
+                        return makeCardComboFromLevel(*i, 2);
+                    }
+                }
+            }
+            return CardCombo();
+        }
+
 
         // 然后先看一下是不是火箭，是的话就过
         if (comboType == CardComboType::ROCKET)
@@ -695,23 +789,8 @@ struct CardCombo
     }
 };
 
-// 我的牌有哪些
-set<Card> myCards;
-
-// 地主被明示的牌有哪些
-set<Card> landlordPublicCards;
-
-// 大家从最开始到现在都出过什么
-vector<vector<Card>> whatTheyPlayed[PLAYER_COUNT];
-
 // 当前要出的牌需要大过谁
 CardCombo lastValidCombo;
-
-// 大家还剩多少牌
-short cardRemaining[PLAYER_COUNT] = { 20, 17, 17 };
-
-// 我是几号玩家（0-地主，1-农民甲，2-农民乙）
-int myPosition;
 
 namespace BotzoneIO
 {
@@ -818,6 +897,7 @@ int main()
     // findFirstValid 函数可以用作修改的起点
     CardCombo myAction = lastValidCombo.findFirstValid(myCards.begin(), myCards.end());
     //myAction.debugPrint();
+    //cout << "myPosition: " << myPosition << endl;
 
     // 是合法牌
     assert(myAction.comboType != CardComboType::INVALID);
