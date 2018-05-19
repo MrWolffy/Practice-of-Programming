@@ -605,15 +605,16 @@ struct CardCombo
 
             // 地主不要，农民甲要，农民乙不管
             // 除非农民乙的手牌数比农民甲小，或者农民甲出的牌比较小（不带人）
-            if (whatTheyPlayed[0].end() -> empty()
-                && !(whatTheyPlayed[1].end() -> empty())
+            if ((--whatTheyPlayed[0].end()) -> empty()
+                && !((--whatTheyPlayed[1].end()) -> empty())
                 && cardRemaining[1] > cardRemaining[2]
                 && comboLevel >= 8) {
                 return CardCombo();
             }
 
             // 农民甲出的牌已经比较大了，农民乙不管
-            if (comboLevel >= MAX_STRAIGHT_LEVEL) return CardCombo();
+            CardCombo tmp = CardCombo((--whatTheyPlayed[1].end()) -> begin(), (--whatTheyPlayed[1].end()) -> end());
+            if (tmp.comboLevel >= MAX_STRAIGHT_LEVEL) return CardCombo();
         }
 
         // 增加农民甲不管农民乙的判断
@@ -621,7 +622,7 @@ struct CardCombo
         if (myPosition == 1) {
             CardCombo tmp = CardCombo((--whatTheyPlayed[2].end()) -> begin(), (--whatTheyPlayed[2].end()) -> end());
             // 如果地主没出，农民乙出的牌已经比较大了，农民甲不管
-            if (whatTheyPlayed[0].end() -> empty() && tmp.comboLevel >= MAX_STRAIGHT_LEVEL)
+            if ((--whatTheyPlayed[0].end()) -> empty() && tmp.comboLevel >= MAX_STRAIGHT_LEVEL)
                 return CardCombo();
         }
 
@@ -633,12 +634,18 @@ struct CardCombo
                     return makeCardComboFromLevel(*i, 1);
                 }
             }
-            for (auto i = levelCount.pair.begin(); i != levelCount.pair.end(); ++i) {
+            for (auto i = --levelCount.pair.end(); i != --levelCount.pair.begin(); --i) {
                 if (*i > card2level(cards[0])) {
                     return makeCardComboFromLevel(*i, 1);
                 }
             }
-            return CardCombo();
+            for (auto i = --levelCount.triplet.end(); i != --levelCount.triplet.begin(); --i) {
+                if (*i > card2level(cards[0]) && (*i >= 11 || cardRemaining[myPosition] <= 10)) {
+                    return makeCardComboFromLevel(*i, 1);
+                }
+            }
+            if (cardRemaining[0] >= 10 && cardRemaining[1] >= 10 && cardRemaining[2] >= 10)
+                return CardCombo();
         }
         if (comboType == CardComboType::PAIR) {
             for (auto i = levelCount.pair.begin(); i != levelCount.pair.end(); ++i) {
@@ -649,13 +656,14 @@ struct CardCombo
             if ((myPosition == 0 && cardRemaining[1] <= 6 && cardRemaining[2] <= 6) ||
                     (myPosition == 1 && cardRemaining[0] <= 6) ||
                     (myPosition == 2 && cardRemaining[0] <= 6)) {
-                for (auto i = levelCount.triplet.begin(); i != levelCount.triplet.end(); ++i) {
+                for (auto i = --levelCount.triplet.end(); i != --levelCount.triplet.begin(); --i) {
                     if (*i > card2level(cards[0])) {
                         return makeCardComboFromLevel(*i, 2);
                     }
                 }
             }
-            return CardCombo();
+            if (cardRemaining[0] >= 10 && cardRemaining[1] >= 10 && cardRemaining[2] >= 10)
+                return CardCombo();
         }
 
 
