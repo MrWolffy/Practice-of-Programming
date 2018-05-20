@@ -559,12 +559,12 @@ struct CardCombo
         // 增加最简单的拆牌算法
         // by尹晨桥 5.15
         auto levelCount = levelCount_naive(begin, end);
+        CardCombo nowCombo = CardCombo(begin, end);
 
         if (comboType == CardComboType::PASS) // 如果不需要大过谁，只需要随便出
         {
             // 修改随便出的算法，如果剩余的牌能凑成一种牌型，就全部出掉
             // by尹晨桥 5.15
-            CardCombo nowCombo = CardCombo(begin, end);
             if (nowCombo.comboType != CardComboType::INVALID) return nowCombo;
 
 
@@ -584,17 +584,21 @@ struct CardCombo
                 //cout << "have single and pair" << endl;
                 //cout << "single: " << *Single.second.cards.begin() << endl;
                 //cout << "pair: " << *Pair.second.cards.begin() << endl;
+
                 if (*Single.second.cards.begin() < *Pair.second.cards.begin())
                     return Single.second;
                 return Pair.second;
             }
-            // end
 
 
             CARD_ITERATOR second = begin;
             second++;
             return CardCombo(begin, second); // 那么就出第一张牌……
         }
+
+        // 如果剩余的牌一起出能管，就一起出了
+        // by尹晨桥 5.20
+        if (canBeBeatenBy(nowCombo)) return nowCombo;
 
         // 增加农民乙不能管农民甲的判断
         // by尹晨桥 5.19
@@ -628,31 +632,45 @@ struct CardCombo
 
         // 增加跟牌时不拆牌的判断
         // by尹晨桥 5.19
+        // 跟单牌
         if (comboType == CardComboType::SINGLE) {
+            // 先搜索单张
             for (auto i = levelCount.single.begin(); i != levelCount.single.end(); ++i) {
+                // 如果既有2又有王，优先出2
+                if ((*i == level_joker || *i == level_JOKER) && *i > card2level(cards[0])) {
+                    if (levelCount.countEachLevel[12] != 0)
+                        return makeCardComboFromLevel(12, 1);
+                }
                 if (*i > card2level(cards[0])) {
                     return makeCardComboFromLevel(*i, 1);
                 }
             }
+            // 单张搜索不到，再搜索对子
             for (auto i = --levelCount.pair.end(); i != --levelCount.pair.begin(); --i) {
                 if (*i > card2level(cards[0])) {
                     return makeCardComboFromLevel(*i, 1);
                 }
             }
+            // 对子搜索不到，再搜索三条
             for (auto i = --levelCount.triplet.end(); i != --levelCount.triplet.begin(); --i) {
                 if (*i > card2level(cards[0]) && (*i >= 11 || cardRemaining[myPosition] <= 10)) {
                     return makeCardComboFromLevel(*i, 1);
                 }
             }
+            // 非残局情况下不拆牌
             if (cardRemaining[0] >= 10 && cardRemaining[1] >= 10 && cardRemaining[2] >= 10)
                 return CardCombo();
         }
+
+        // 跟对子
         if (comboType == CardComboType::PAIR) {
+            // 先搜索对子
             for (auto i = levelCount.pair.begin(); i != levelCount.pair.end(); ++i) {
                 if (*i > card2level(cards[0])) {
                     return makeCardComboFromLevel(*i, 2);
                 }
             }
+            // 残局情况下可以拆三条
             if ((myPosition == 0 && cardRemaining[1] <= 6 && cardRemaining[2] <= 6) ||
                     (myPosition == 1 && cardRemaining[0] <= 6) ||
                     (myPosition == 2 && cardRemaining[0] <= 6)) {
@@ -662,10 +680,77 @@ struct CardCombo
                     }
                 }
             }
+            // 非残局不拆牌
             if (cardRemaining[0] >= 10 && cardRemaining[1] >= 10 && cardRemaining[2] >= 10)
                 return CardCombo();
         }
 
+        // 跟三带一、三带二
+        // by尹晨桥 5.20
+        // 跟三带一
+        if (comboType == CardComboType::TRIPLET1) {
+
+            // 先搜索一下主牌
+            CardCombo Triplet;
+            for (auto i = levelCount.triplet.begin(); i != levelCount.triplet.end(); ++i) {
+                if (*i > card2level(cards[0])) {
+                    Triplet = makeCardComboFromLevel(*i, 3);
+                    break;
+                }
+            }
+            vector<Card> tmp(Triplet.cards.begin(), Triplet.cards.end());
+
+            // 再搜索从牌
+            // 如果有单牌，先带单牌
+            if (!levelCount.single.empty()) {
+                auto Single = makeCardComboFromLevel(levelCount.single[0], 1);
+                tmp.push_back(Single.cards[0]);
+                return CardCombo(tmp.begin(), tmp.end());
+            }
+            // 如果没有单牌有对子，且对子不带人，则拆对子
+            if (!levelCount.pair.empty()) {
+                if (levelCount.pair[0] <= 7) {
+                    auto Single = makeCardComboFromLevel(levelCount.pair[0], 1);
+                    tmp.push_back(Single.cards[0]);
+                    return CardCombo(tmp.begin(), tmp.end());
+                }
+            }
+            // 如果都没有，则按照无脑算法出
+        }
+
+        // 跟三带二
+        if (comboType == CardComboType::TRIPLET1) {
+
+            // 先搜索一下主牌
+            CardCombo Triplet;
+            for (auto i = levelCount.triplet.begin(); i != levelCount.triplet.end(); ++i) {
+                if (*i > card2level(cards[0])) {
+                    Triplet = makeCardComboFromLevel(*i, 3);
+                    break;
+                }
+            }
+            vector<Card> tmp(Triplet.cards.begin(), Triplet.cards.end());
+
+            // 再搜索从牌
+            // 如果有对子，先带对子
+            if (!levelCount.pair.empty()) {
+                auto Pair = makeCardComboFromLevel(levelCount.pair[0], 2);
+                tmp.push_back(Pair.cards[0]);
+                tmp.push_back(Pair.cards[1]);
+                return CardCombo(tmp.begin(), tmp.end());
+            }
+            // 如果没有对子有三条，且三条不带人，则拆三条
+            if (!levelCount.triplet.empty()) {
+                if (levelCount.triplet[0] <= 7) {
+                    auto Pair = makeCardComboFromLevel(levelCount.pair[0], 2);
+                    tmp.push_back(Pair.cards[0]);
+                    tmp.push_back(Pair.cards[1]);
+                    return CardCombo(tmp.begin(), tmp.end());
+                }
+            }
+            // 如果再搜索不到，就要拆炸弹了，不行，直接过
+            return CardCombo();
+        }
 
         // 然后先看一下是不是火箭，是的话就过
         if (comboType == CardComboType::ROCKET)
