@@ -552,6 +552,7 @@ struct CardCombo
     //重载makeCardComboFromLevel
     //by 付云天 5.19
     vector<Card> makeCardComboFromLevel (vector<Card>a) {
+        sort(a.begin(), a.end());
         vector<Card> tmp;
         vector<Card>::iterator iter = a.begin();
         for (auto i = myCards.begin(); i != myCards.end()&&iter != a.end(); ++i) {
@@ -581,44 +582,14 @@ struct CardCombo
         // 寻找高级牌, 并记录张数
         //by付云天 5.19
         bool flag = 1;
-        if (levelCount.total_number >= 5&&flag) {
-            //理想情况：仅从单牌中寻找顺子
-            vector<Level>straight;
-            short number = levelCount.single.size();
-            if (number >= 5) {
-                for (short i = number; i >=5 ; i--) {
-                    for (short j = 0; j < number - i +1; j++) {
-                        if (levelCount.single[j + i - 1] - levelCount.single[j] == i - 1&& levelCount.single[j + i - 1]!=12) {
-                            for (short k = j; k < j + i; k++) {
-                                straight.push_back(levelCount.single[k]);
-                            }
-                            break;
-                        }
-                    }
-                }
-            }
-            //理想情况：仅从对子中寻找双顺
-            vector<Level>straight2;
-            short number2 = levelCount.pair.size();
-            if (number2 >= 3) {
-                for (short i = number2; i >= 3; i--) {
-                    for (short j = 0; j < number2 - i + 1; j++) {
-                        if (levelCount.pair[j + i - 1] - levelCount.pair[j] == i - 1&& levelCount.pair[j + i - 1]!=12) {
-                            for (short k = j; k < j + i; k++) {
-                                straight2.push_back(levelCount.pair[k]);
-                            }
-                            break;
-                        }
-                    }
-                }
-            }
+        if (levelCount.total_number >= 5 && flag) {
             //寻找飞机
             vector < Level>plane;
             short number3 = levelCount.triplet.size();
             if (number3 >= 2) {
                 for (short i = number3; i >= 2; i++) {
                     for (short j = 0; j < number3 - i + 1; j++) {
-                        if (levelCount.triplet[j + i - 1] - levelCount.triplet[j] == i - 1&& levelCount.triplet[j + i - 1]!=12) {
+                        if (levelCount.triplet[j + i - 1] - levelCount.triplet[j] == i - 1 && levelCount.triplet[j + i - 1] != 12) {
                             for (short k = j; k < j + i; k++) {
                                 plane.push_back(levelCount.triplet[k]);
                             }
@@ -627,16 +598,55 @@ struct CardCombo
                     }
                 }
             }
-            //尝试拆三张组成双顺
-
-
+            //暴力拆双顺
+            vector<Level>straight2;
+            short number2 = levelCount.pair.size() + levelCount.triplet.size();
+            vector<Level>PairPlusTriplet = levelCount.pair;
+            PairPlusTriplet.insert(PairPlusTriplet.end(),
+                                   levelCount.triplet.begin(), levelCount.triplet.end());
+            sort(PairPlusTriplet.begin(), PairPlusTriplet.end());
+            if (number2 >= 3) {
+                for (short i = number2; i >= 3; i--) {
+                    for (short j = 0; j < number2 - i + 1; j++) {
+                        if (PairPlusTriplet[j + i - 1] - PairPlusTriplet[j] == i - 1
+                            && PairPlusTriplet[j + i - 1] < 12) {
+                            for (short k = j; k < j + i; k++) {
+                                straight2.push_back(PairPlusTriplet[k]);
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+            //暴力拆顺子
+            vector<Level>straight;
+            vector<Level>SinglePlusPairPlusTriplet = PairPlusTriplet;
+            SinglePlusPairPlusTriplet.insert(SinglePlusPairPlusTriplet.end(),
+                                             levelCount.single.begin(), levelCount.single.end());
+            short number = SinglePlusPairPlusTriplet.size();
+            sort(SinglePlusPairPlusTriplet.begin(), SinglePlusPairPlusTriplet.end());
+            if (number >= 5) {
+                for (short i = number; i >= 5; i--) {
+                    for (short j = 0; j < number - i + 1; j++) {
+                        if (SinglePlusPairPlusTriplet[j + i - 1] - SinglePlusPairPlusTriplet[j] == i - 1
+                            && SinglePlusPairPlusTriplet[j + i - 1] < 12) {
+                            for (short k = j; k < j + i; k++) {
+                                straight.push_back(SinglePlusPairPlusTriplet[k]);
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
 
 
             //判断如何出高级牌
             if (straight.size() || straight2.size() || plane.size()) {
                 //判断飞机是否可出
+                number2 = levelCount.pair.size();
+                number = levelCount.single.size();
                 if (plane.size()) {
-                    if (*(plane.rbegin()) < 10|| *(plane.rbegin()) > 10|| levelCount.total_number < 12) {
+                    if (*(plane.rbegin()) < 10 || *(plane.rbegin()) > 10 || levelCount.total_number < 12) {
                         //判断是否带大机翼
                         if (number2 >= plane.size()) {
                             vector<Card> wing;
@@ -664,14 +674,14 @@ struct CardCombo
                                     return CardCombo(solve.begin(), solve.end());
                                 }
                                     //若大机翼不够，则尝试小机翼
-                                else  {
+                                else {
                                     wing.clear();
                                     for (short i = 0; i < number; i++) {
-                                        if (find(straight.begin(), straight.end(), levelCount.single[i])== straight.end()) {
+                                        if (find(straight.begin(), straight.end(), levelCount.single[i]) == straight.end()) {
                                             wing.push_back(levelCount.single[i]);
                                         }
                                     }
-                                    if(wing.size()>=plane.size()) {
+                                    if (wing.size() >= plane.size()) {
                                         vector<Card> solve;
                                         for (int i = 0; i < plane.size(); i++) {
                                             for (int j = 0; j < 3; j++) {
@@ -695,7 +705,7 @@ struct CardCombo
                                         return CardCombo(solve.begin(), solve.end());
                                     }
                                 }
-                                    //若小机翼也不够，则不带机翼
+                                //若小机翼也不够，则不带机翼
 
                             }
                             else if (plane.size() > 2) {
@@ -737,7 +747,7 @@ struct CardCombo
                                         return CardCombo(solve.begin(), solve.end());
                                     }
                                         //都不够则不带机翼
-                                    else{
+                                    else {
                                         vector<Card> solve;
                                         for (int i = 0; i < plane.size(); i++) {
                                             for (int j = 0; j < 3; j++) {
@@ -755,20 +765,43 @@ struct CardCombo
 
                     }
                 }
-                //根据单顺和双顺的张数来出牌，哪个多出哪个
-                if (straight.size() > straight2.size()) {
-                    vector<Card>solve;
-                    for (int i = 0; i < straight.size();i++) {
-                        solve.push_back(straight[i]);
-                    }
-                    solve = makeCardComboFromLevel(solve);
-                    return CardCombo(solve.begin(), solve.end());
-                }
-                else if (straight.size() < straight2.size()) {
-                    //如果双顺过大，在牌数还较多的时候则不出
-                    if (*(straight2.rbegin()) <= 11 || levelCount.total_number < 10) {
+                //根据单顺和双顺的张数来出牌，牌数相差3以上则出牌数多的
+                if (straight.size() - straight2.size() >= 3|| straight.size() - straight2.size()<=-3) {
+                    if (straight.size() > straight2.size()) {
                         vector<Card>solve;
-                        for (int i = 0; i < straight2.size();i++) {
+                        for (int i = 0; i < straight.size(); i++) {
+                            solve.push_back(straight[i]);
+                        }
+                        solve = makeCardComboFromLevel(solve);
+                        return CardCombo(solve.begin(), solve.end());
+                    }
+                    else {
+                        if (*(straight2.rbegin()) <= 11 || levelCount.total_number < 10) {
+                            vector<Card>solve;
+                            for (int i = 0; i < straight2.size(); i++) {
+                                for (int j = 0; j < 2; j++) {
+                                    solve.push_back(straight2[i]);
+                                }
+                            }
+                            solve = makeCardComboFromLevel(solve);
+                            return CardCombo(solve.begin(), solve.end());
+                        }
+                            //如果因双顺过大不出，则考虑单顺
+                        else if (straight.size()) {
+                            vector<Card>solve;
+                            for (int i = 0; i < straight.size(); i++) {
+                                solve.push_back(straight[i]);
+                            }
+                            solve = makeCardComboFromLevel(solve);
+                            return CardCombo(solve.begin(), solve.end());
+                        }
+                    }
+                }
+                    //牌数相差较小则出小的
+                else  {
+                    if (*(straight2.rbegin()) < *(straight.rbegin())) {
+                        vector<Card>solve;
+                        for (int i = 0; i < straight2.size(); i++) {
                             for (int j = 0; j < 2; j++) {
                                 solve.push_back(straight2[i]);
                             }
@@ -776,10 +809,9 @@ struct CardCombo
                         solve = makeCardComboFromLevel(solve);
                         return CardCombo(solve.begin(), solve.end());
                     }
-                        //如果因双顺过大不出，则考虑单顺
-                    else if(straight.size()){
+                    else {
                         vector<Card>solve;
-                        for (int i = 0; i < straight.size();i++) {
+                        for (int i = 0; i < straight.size(); i++) {
                             solve.push_back(straight[i]);
                         }
                         solve = makeCardComboFromLevel(solve);
@@ -793,7 +825,6 @@ struct CardCombo
             }
         }
 
-
         // 修改随便出的算法，如果存在不需要拆牌的单张和对子，就出一个最小的单张或对子
         // by尹晨桥 5.15
         auto Single = findFirstSingle(begin, end);
@@ -806,7 +837,7 @@ struct CardCombo
                 vector<Card>solve;
                 //考虑三代双
                 if (Pair.first) {
-                    if(*(Pair.second.cards.begin()) < 41 || levelCount.total_number < 6)
+                    if (*(Pair.second.cards.begin()) < 41 || levelCount.total_number < 6)
                         for (int i = 0; i < 3; i++) {
                             solve.push_back(levelCount.triplet[0]);
                         }
@@ -815,7 +846,7 @@ struct CardCombo
                     solve.push_back(*(++Pair.second.cards.begin()));
                     return CardCombo(solve.begin(), solve.end());
                 }
-                    //不行就三带一
+                //不行就三带一
                 if (Single.first) {
                     for (int i = 0; i < 3; i++) {
                         solve.push_back(levelCount.triplet[0]);
@@ -824,7 +855,7 @@ struct CardCombo
                     solve.push_back(*(Single.second.cards.begin()));
                     return CardCombo(solve.begin(), solve.end());
                 }
-                    //还不行就三不带
+                //还不行就三不带
                 {
                     for (int i = 0; i < 3; i++) {
                         solve.push_back(levelCount.triplet[0]);
@@ -874,8 +905,7 @@ struct CardCombo
             //cout << "pair: " << *Pair.second.cards.begin() << endl;
 
             if (*Single.second.cards.begin() < *Pair.second.cards.begin()
-                || *Single.second.cards.rbegin() >= *Pair.second.cards.rbegin()
-                ||Single.second.cards.size() > Pair.second.cards.size())
+                || *Single.second.cards.rbegin() >= 44)
                 return Single.second;
             return Pair.second;
         }
@@ -1055,7 +1085,8 @@ struct CardCombo
 
             // 农民甲出的牌已经比较大了，农民乙不管
             CardCombo tmp = CardCombo((--whatTheyPlayed[1].end()) -> begin(), (--whatTheyPlayed[1].end()) -> end());
-            if (tmp.comboLevel >= MAX_STRAIGHT_LEVEL) return CardCombo();
+            if (tmp.comboLevel >= 10 && cardRemaining[myPosition] >= 5)
+                return CardCombo();
         }
 
         // 增加农民甲不管农民乙的判断
@@ -1063,7 +1094,24 @@ struct CardCombo
         if (myPosition == 1) {
             CardCombo tmp = CardCombo((--whatTheyPlayed[2].end()) -> begin(), (--whatTheyPlayed[2].end()) -> end());
             // 如果地主没出，农民乙出的牌已经比较大了，农民甲不管
-            if ((--whatTheyPlayed[0].end()) -> empty() && tmp.comboLevel >= MAX_STRAIGHT_LEVEL)
+            if ((--whatTheyPlayed[0].end()) -> empty()
+                && tmp.comboLevel >= 10
+                && cardRemaining[myPosition] >= 5)
+                return CardCombo();
+            // 如果农民甲只能拿大牌管农民乙的小牌，农民甲不管
+            if (comboType == CardComboType::SINGLE
+                && (--whatTheyPlayed[0].end()) -> empty()
+                && tmp.comboLevel <= 7
+                && (levelCount.single.empty() || levelCount.single[0] >= MAX_STRAIGHT_LEVEL)
+                && cardRemaining[myPosition] >= 5
+                && cardRemaining[0] != 1)
+                return CardCombo();
+            if (comboType == CardComboType::PAIR
+                && (--whatTheyPlayed[0].end()) -> empty()
+                && tmp.comboLevel <= 7
+                && (levelCount.pair.empty() || levelCount.pair[0] >= MAX_STRAIGHT_LEVEL)
+                && cardRemaining[myPosition] >= 5
+                && cardRemaining[0] != 2)
                 return CardCombo();
         }
 
@@ -1137,7 +1185,13 @@ struct CardCombo
             }
 
             // 如果找不到，使用无脑策略（无脑策略考虑能不能炸和火箭）
-            if (Triplet.cards.empty()) return findFirstValid_naive(begin, end);
+            if (Triplet.cards.empty()) {
+                auto naiveValid = findFirstValid_naive(begin, end);
+                // 如果找不到，农民乙不炸农民甲
+                if (myPosition == 2 && !((--whatTheyPlayed[1].end()) -> empty()))
+                    return CardCombo();
+                return naiveValid;
+            }
 
             // 如果找得到，复制一下
             vector<Card> tmp(Triplet.cards.begin(), Triplet.cards.end());
@@ -1157,6 +1211,12 @@ struct CardCombo
                     return CardCombo(tmp.begin(), tmp.end());
                 }
             }
+            // 看看有没有炸弹
+            // 农民乙不炸农民甲
+            if (!levelCount.bomb.empty() &&
+                !(myPosition == 2 && !((--whatTheyPlayed[1].end()) -> empty())))
+                return makeCardComboFromLevel(levelCount.bomb[0], 4);
+
             // 如果都没有，则按照无脑算法出
         }
 
@@ -1195,7 +1255,7 @@ struct CardCombo
             // 如果没有对子有三条，且三条不带人，则拆三条
             if (!levelCount.triplet.empty()) {
                 if (levelCount.triplet[0] <= 7) {
-                    auto Pair = makeCardComboFromLevel(levelCount.pair[0], 2);
+                    auto Pair = makeCardComboFromLevel(levelCount.triplet[0], 2);
                     tmp.push_back(Pair.cards[0]);
                     tmp.push_back(Pair.cards[1]);
                     return CardCombo(tmp.begin(), tmp.end());
