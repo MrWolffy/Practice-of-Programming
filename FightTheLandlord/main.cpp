@@ -917,6 +917,166 @@ struct CardCombo
     }
 
 
+    //组牌、评估及炸弹处理
+    //by 刘翔宇 5.20
+    //暂时将炸弹处理为一定能回手的牌
+    struct CardsProcessor {
+        struct Packs {
+            Level level;
+            short type;//牌类，暂时定为0-9为0：炸弹:1：航天飞机类（包括带与不带机翼）:2：四带、3：飞机类：4：双顺；5：三带类；6：顺子；7：对子；8：单张；9：火箭
+            //此处因为初始naive算法问题（牌组在更小类牌中后不会再组到后面的牌类中），所以航天飞机与四带类和炸弹其实并不会存在，只是先设置好以便后续算法优化
+            short count;//长度，在考虑顺子等的时候的牌手数可能会出现问题，如3-J的顺子中拆出来5-9来管别人可能会造成牌手数严重增多的问题，需要后续优化，其余情况暂时默认为对手数无影响（如四连的双顺，如果三连管了别人的话相当于从一手的连顺牌变成了一手的对子牌）
+            Card followcards[10];//从牌，暂时没有相关处理
+            Packs(Level l, short t, short c) {
+                level = l;
+                type = t;
+                count = c;
+            }
+        };
+        vector<Packs> pack[10];
+        int hands;//牌手数（需要几轮出完）
+        double value;//牌组的价值（用以判断该牌当前处于优势还是劣势，是应该积极攻击还是偷偷溜牌）
+        CardsProcessor() {
+            hands = 0;
+            short levelcount[15];
+            memset(levelcount, 0, sizeof(levelcount));
+            for (auto i = myCards.begin(); i != myCards.end(); i++) {
+                levelcount[card2level(*i)]++;
+            }
+            for (int i = 0; i < 10; i++) {
+                switch (i)
+                {
+                    case 0://炸弹
+                        for (int j = 0; j < 15; j++) {
+                            if (levelcount[j] == 4) {
+                                pack[i].push_back(Packs(j, i, 1));
+                                levelcount[j] -= 4;
+                            }
+                        }
+                        break;
+                    case 1://航天飞机
+                        break;
+                    case 2://四带
+                        break;
+                    case 3://飞机类
+                        for (int j = 0; j < 15; j++) {
+                            if (levelcount[j] >= 3) {
+                                int c = 1;
+                                while (j + c < MAX_STRAIGHT_LEVEL && levelcount[j + c] >= 3)
+                                {
+                                    c++;
+                                }
+                                if (c>=2) {
+                                    pack[i].push_back(Packs(j, i, c));
+                                    hands++;
+                                    for (int k = 0; k < c; k++) {
+                                        levelcount[j + k] -= 3;
+                                    }
+                                }
+                            }
+                        }
+                        break;
+                    case 4://双顺
+                        for (int j = 0; j < 15; j++) {
+                            if (levelcount[j] >= 2) {
+                                int c = 1;
+                                while (j + c < MAX_STRAIGHT_LEVEL&&levelcount[j + c] >= 2)
+                                {
+                                    c++;
+                                }
+                                if (c >= 3) {
+                                    pack[i].push_back(Packs(j, i, c));
+                                    hands++;
+                                    for (int k = 0; k < c; k++) {
+                                        levelcount[j + k] -= 2;
+                                    }
+                                }
+                            }
+                        }
+                        break;
+                    case 5://三带
+                        for (int j = 0; j < 15; j++) {
+                            if (levelcount[j] >= 3) {
+                                pack[i].push_back(Packs(j, i, 1));
+                                hands++;
+                                levelcount[j] -= 3;
+                            }
+                        }
+                        break;
+                    case 6://顺子
+                        for (int j = 0; j < 15; j++) {
+                            if (levelcount[j]) {
+                                int c = 1;
+                                while (j+c<MAX_STRAIGHT_LEVEL&&levelcount[j+c])
+                                {
+                                    c++;
+                                }
+                                if (c >= 5) {
+                                    pack[i].push_back(Packs(j, i, c));
+                                    hands++;
+                                    for (int k = 0; k < c; k++) {
+                                        levelcount[j + k] -= 1;
+                                    }
+                                }
+                            }
+                        }
+                        break;
+                    case 7://对子
+                        for (int j = 0; j < 15; j++) {
+                            if (levelcount[j] >= 2) {
+                                pack[i].push_back(Packs(j, i, 1));
+                                hands++;
+                                levelcount[j] -= 2;
+                            }
+                        }
+                        break;
+                    case 8://单张
+                        for (int j = 0; j < 15; j++) {
+                            if (levelcount[j]) {
+                                pack[i].push_back(Packs(j, i, 1));
+                                hands++;
+                                levelcount[j]--;
+                            }
+                        }
+                    case 9://火箭
+                        break;
+                    default:
+                        break;
+                }
+            }
+            //因为飞机、三带、四带等会带走单牌，所以会因此而减少手数
+            for (int i = 0; i < pack[1].size(); i++) {
+                hands -= pack[1][i].count * 2;
+            }
+            hands -= pack[2].size() * 2;
+            for (int i = 0; i < pack[3].size(); i++) {
+                hands -= pack[1][i].count;
+            }
+            hands -= pack[5].size();
+            value = evaluate();
+        }
+        //评估函数目标：平均要在几手牌内打完
+        double evaluate() {
+            double res=0;
+            double normallevel[10] = {8,8,8,8,8,8,8,8,8,8};
+            double typeprop[10] = { 0,0,0,0,0,0.2,0.2,0.5,1.0,0 };//暂时只考虑三带、顺子、对、单张的情况，因为其余牌型出现概率较低
+            for (int i = 1; i < 9; i++) {
+                for (int j=0; j <pack[i].size(); j++) {
+                    res += (pack[i][j].level - normallevel[i])*typeprop[i] / normallevel[i];
+                }
+            }
+            res += pack[1].size()+pack[9].size();
+            res = -res;
+            return res;
+        }
+
+        //如果炸完能在小于1手内走完，那就炸tmd！
+        bool usebomb() {
+            return evaluate() < 0;
+        }
+    };
+
+
     /**
      * 从指定手牌中寻找第一个能大过当前牌组的牌组
      * 如果随便出的话只出第一张
@@ -1025,21 +1185,26 @@ struct CardCombo
         failure:
         // 实在找不到啊
         // 最后看一下能不能炸吧
+        // 改变为usebomb判定为true时使用炸弹，否则过牌
+        // by 刘翔宇 5.20
+        CardsProcessor mProcessor;
+        if (mProcessor.usebomb()) {
+            for (Level i = 0; i < level_joker; i++)
+                if (counts[i] == 4 && (comboType != CardComboType::BOMB || i > packs[0].level)) // 如果对方是炸弹，能炸的过才行
+                {
+                    // 还真可以啊……
+                    Card bomb[] = { Card(i * 4), Card(i * 4 + 1), Card(i * 4 + 2), Card(i * 4 + 3) };
+                    return CardCombo(bomb, bomb + 4);
+                }
 
-        for (Level i = 0; i < level_joker; i++)
-            if (counts[i] == 4 && (comboType != CardComboType::BOMB || i > packs[0].level)) // 如果对方是炸弹，能炸的过才行
+            // 有没有火箭？
+            if (counts[level_joker] + counts[level_JOKER] == 2)
             {
-                // 还真可以啊……
-                Card bomb[] = { Card(i * 4), Card(i * 4 + 1), Card(i * 4 + 2), Card(i * 4 + 3) };
-                return CardCombo(bomb, bomb + 4);
+                Card rocket[] = { card_joker, card_JOKER };
+                return CardCombo(rocket, rocket + 2);
             }
-
-        // 有没有火箭？
-        if (counts[level_joker] + counts[level_JOKER] == 2)
-        {
-            Card rocket[] = { card_joker, card_JOKER };
-            return CardCombo(rocket, rocket + 2);
-        }
+        }else
+            return CardCombo();
 
         // ……
         return CardCombo();
