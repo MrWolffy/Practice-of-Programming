@@ -109,6 +109,7 @@ constexpr Level MAX_STRAIGHT_LEVEL = 11;
 constexpr Level level_joker = 13;
 constexpr Level level_JOKER = 14;
 
+
 // 我的牌有哪些
 set<Card> myCards;
 
@@ -473,6 +474,14 @@ struct CardCombo
         vector<Level> bomb;
         int countEachLevel[MAX_LEVEL + 1];
         short total_number;
+        levels() {
+            single.clear();
+            pair.clear();
+            triplet.clear();
+            bomb.clear();
+            memset(countEachLevel, 0, sizeof(countEachLevel));
+            total_number = 0;
+        }
     };
 
     // 增加最简单的拆牌算法，将每一个level的牌作为一类
@@ -486,7 +495,6 @@ struct CardCombo
             counts[card2level(c)]++;
 
         levels tmp;
-        memset(tmp.countEachLevel, 0, sizeof(tmp.countEachLevel));
         for (int i = 0; i <= MAX_LEVEL; ++i) tmp.countEachLevel[i] = counts[i];
         short level_iterator = 0;
         for (; level_iterator < MAX_LEVEL; ++level_iterator) {
@@ -867,6 +875,9 @@ struct CardCombo
         }
 
         // 都打不出就打单张或对子
+        // 如果农民乙只剩两张牌以下，农民甲就出最小的一张
+        if (myPosition == 1 && cardRemaining[2] <= 2) return CardCombo(begin, ++begin);
+
         // 如果对方只剩一张牌
         if ((myPosition && cardRemaining[0] == 1) ||
                 (!myPosition && (cardRemaining[1] == 1 || cardRemaining[2] == 1))) {
@@ -904,8 +915,7 @@ struct CardCombo
             //cout << "single: " << *Single.second.cards.begin() << endl;
             //cout << "pair: " << *Pair.second.cards.begin() << endl;
 
-            if (*Single.second.cards.begin() < *Pair.second.cards.begin()
-                || *Single.second.cards.rbegin() >= 44)
+            if (*Single.second.cards.begin() < *Pair.second.cards.begin())
                 return Single.second;
             return Pair.second;
         }
@@ -1235,21 +1245,18 @@ struct CardCombo
         // 增加农民乙不能管农民甲的判断
         // by尹晨桥 5.19
         if (myPosition == 2) {
-
             // 炸弹不管
             if (comboType == CardComboType::BOMB) return CardCombo();
-
             // 地主不要，农民甲要，农民乙不管
             // 除非农民乙的手牌数比农民甲小，或者农民甲出的牌比较小（不带人）
-            if ((--whatTheyPlayed[0].end()) -> empty()
-                && !((--whatTheyPlayed[1].end()) -> empty())
+            if (whatTheyPlayed[0].rbegin() -> empty()
+                && !(whatTheyPlayed[1].rbegin() -> empty())
                 && cardRemaining[1] > cardRemaining[2]
                 && comboLevel >= 8) {
                 return CardCombo();
             }
-
             // 农民甲出的牌已经比较大了，农民乙不管
-            CardCombo tmp = CardCombo((--whatTheyPlayed[1].end()) -> begin(), (--whatTheyPlayed[1].end()) -> end());
+            CardCombo tmp = CardCombo(whatTheyPlayed[1].rbegin() -> begin(), whatTheyPlayed[1].rbegin() -> end());
             if (tmp.comboLevel >= 10 && cardRemaining[myPosition] >= 5)
                 return CardCombo();
         }
@@ -1257,22 +1264,20 @@ struct CardCombo
         // 增加农民甲不管农民乙的判断
         // by尹晨桥 5.19
         if (myPosition == 1) {
-            CardCombo tmp = CardCombo((--whatTheyPlayed[2].end()) -> begin(), (--whatTheyPlayed[2].end()) -> end());
-            // 如果地主没出，农民乙出的牌已经比较大了，农民甲不管
-            if ((--whatTheyPlayed[0].end()) -> empty()
-                && tmp.comboLevel >= 10
-                && cardRemaining[myPosition] >= 5)
+            CardCombo tmp = CardCombo(whatTheyPlayed[2].rbegin() -> begin(), whatTheyPlayed[2].rbegin() -> end());
+            // 如果地主没出，农民甲不管
+            if (whatTheyPlayed[0].rbegin() -> empty())
                 return CardCombo();
             // 如果农民甲只能拿大牌管农民乙的小牌，农民甲不管
             if (comboType == CardComboType::SINGLE
-                && (--whatTheyPlayed[0].end()) -> empty()
+                && whatTheyPlayed[0].rbegin() -> empty()
                 && tmp.comboLevel <= 7
                 && (levelCount.single.empty() || levelCount.single[0] >= MAX_STRAIGHT_LEVEL)
                 && cardRemaining[myPosition] >= 5
                 && cardRemaining[0] != 1)
                 return CardCombo();
             if (comboType == CardComboType::PAIR
-                && (--whatTheyPlayed[0].end()) -> empty()
+                && whatTheyPlayed[0].rbegin() -> empty()
                 && tmp.comboLevel <= 7
                 && (levelCount.pair.empty() || levelCount.pair[0] >= MAX_STRAIGHT_LEVEL)
                 && cardRemaining[myPosition] >= 5
@@ -1285,24 +1290,40 @@ struct CardCombo
         // 跟单牌
         if (comboType == CardComboType::SINGLE) {
             // 先搜索单张
-            for (auto i = levelCount.single.begin(); i != levelCount.single.end(); ++i) {
-                // 如果既有2又有王，优先出2
-                if ((*i == level_joker || *i == level_JOKER) && 12 > packs[0].level) {
-                    if (levelCount.countEachLevel[12] != 0)
-                        return makeCardComboFromLevel(12, 1);
+            // 如果农民跟牌，地主只剩一张，则从最大的开始出
+            // 如果地主跟牌，一个农民只剩一张，则从最大的开始出
+            // by尹晨桥 5.21
+            if ((myPosition > 0 && cardRemaining[0] == 1)
+                || (myPosition == 0 && (cardRemaining[1] == 1 || cardRemaining[2] == 1))) {
+                for (auto i = levelCount.single.rbegin(); i != levelCount.single.rend(); ++i) {
+                    if (*i > packs[0].level) {
+                        return makeCardComboFromLevel(*i, 1);
+                    }
                 }
-                if (*i > packs[0].level) {
-                    return makeCardComboFromLevel(*i, 1);
+            }
+            // 否则正常跟牌
+            else {
+                for (auto i = levelCount.single.begin(); i != levelCount.single.end(); ++i) {
+                    // 如果既有2又有王，优先出2
+                    if ((*i == level_joker || *i == level_JOKER) && 12 > packs[0].level) {
+                        if (levelCount.countEachLevel[12] != 0)
+                            return makeCardComboFromLevel(12, 1);
+                    }
+                    if (*i > packs[0].level) {
+                        return makeCardComboFromLevel(*i, 1);
+                    }
                 }
             }
             // 单张搜索不到，再搜索对子
-            for (auto i = --levelCount.pair.end(); i != --levelCount.pair.begin(); --i) {
+            if (cardRemaining[myPosition] == 2 && !levelCount.pair.empty())
+                return CardCombo();
+            for (auto i = levelCount.pair.rbegin(); i != levelCount.pair.rend(); ++i) {
                 if (*i > packs[0].level) {
                     return makeCardComboFromLevel(*i, 1);
                 }
             }
             // 对子搜索不到，再搜索三条
-            for (auto i = --levelCount.triplet.end(); i != --levelCount.triplet.begin(); --i) {
+            for (auto i = levelCount.triplet.rbegin(); i != levelCount.triplet.rend(); ++i) {
                 if (*i > packs[0].level && (*i >= 11 || cardRemaining[myPosition] <= 10)) {
                     return makeCardComboFromLevel(*i, 1);
                 }
@@ -1315,16 +1336,30 @@ struct CardCombo
         // 跟对子
         if (comboType == CardComboType::PAIR) {
             // 先搜索对子
-            for (auto i = levelCount.pair.begin(); i != levelCount.pair.end(); ++i) {
-                if (*i > packs[0].level) {
-                    return makeCardComboFromLevel(*i, 2);
+            // 如果农民跟牌，地主只剩两张，则从最大的开始出
+            // 如果地主跟牌，一个农民只剩两张，则从最大的开始出
+            // by尹晨桥 5.21
+            if ((myPosition > 0 && cardRemaining[0] == 2)
+                || (myPosition == 0 && (cardRemaining[1] == 2 || cardRemaining[2] == 2))) {
+                for (auto i = levelCount.pair.rbegin(); i != levelCount.pair.rend(); ++i) {
+                    if (*i > packs[0].level) {
+                        return makeCardComboFromLevel(*i, 2);
+                    }
+                }
+            }
+            // 否则正常跟牌
+            else {
+                for (auto i = levelCount.pair.begin(); i != levelCount.pair.end(); ++i) {
+                    if (*i > packs[0].level) {
+                        return makeCardComboFromLevel(*i, 2);
+                    }
                 }
             }
             // 残局情况下可以拆三条
             if ((myPosition == 0 && cardRemaining[1] <= 6 && cardRemaining[2] <= 6) ||
                     (myPosition == 1 && cardRemaining[0] <= 6) ||
                     (myPosition == 2 && cardRemaining[0] <= 6)) {
-                for (auto i = --levelCount.triplet.end(); i != --levelCount.triplet.begin(); --i) {
+                for (auto i = levelCount.triplet.rbegin(); i != levelCount.triplet.rend(); ++i) {
                     if (*i > packs[0].level) {
                         return makeCardComboFromLevel(*i, 2);
                     }
@@ -1343,17 +1378,28 @@ struct CardCombo
             // 先搜索一下主牌
             CardCombo Triplet;
             for (auto i = levelCount.triplet.begin(); i != levelCount.triplet.end(); ++i) {
+                // 我的牌比较少或对手牌比较少 -> 管
+                // 我的牌比较多且对手牌比较多
+                //      三条比较大 -> 过
+                //      三条比较小 -> 管
                 if (*i > packs[0].level) {
-                    Triplet = makeCardComboFromLevel(*i, 3);
+                    if ((myPosition == 0 && cardRemaining[1] >= 8 && cardRemaining[2] >= 8)
+                          || (myPosition > 0 && cardRemaining[0] >= 8)) {
+                        if (*i < 10) Triplet = makeCardComboFromLevel(*i, 3);
+                    }
+                    else Triplet = makeCardComboFromLevel(*i, 3);
                     break;
                 }
             }
+
+            // 如果因为三条过大没有找到，直接过
+            if (Triplet.cards.empty() && !levelCount.triplet.empty()) return CardCombo();
 
             // 如果找不到，使用无脑策略（无脑策略考虑能不能炸和火箭）
             if (Triplet.cards.empty()) {
                 auto naiveValid = findFirstValid_naive(begin, end);
                 // 如果找不到，农民乙不炸农民甲
-                if (myPosition == 2 && !((--whatTheyPlayed[1].end()) -> empty()))
+                if (myPosition == 2 && !(whatTheyPlayed[1].rbegin() -> empty()))
                     return CardCombo();
                 return naiveValid;
             }
@@ -1379,7 +1425,7 @@ struct CardCombo
             // 看看有没有炸弹
             // 农民乙不炸农民甲
             if (!levelCount.bomb.empty() &&
-                !(myPosition == 2 && !((--whatTheyPlayed[1].end()) -> empty())))
+                !(myPosition == 2 && !(whatTheyPlayed[1].rbegin() -> empty())))
                 return makeCardComboFromLevel(levelCount.bomb[0], 4);
 
             // 如果都没有，则按照无脑算法出
@@ -1391,17 +1437,28 @@ struct CardCombo
             // 先搜索一下主牌
             CardCombo Triplet;
             for (auto i = levelCount.triplet.begin(); i != levelCount.triplet.end(); ++i) {
+                // 我的牌比较少或对手牌比较少 -> 管
+                // 我的牌比较多且对手牌比较多
+                //      三条比较大 -> 过
+                //      三条比较小 -> 管
                 if (*i > packs[0].level) {
-                    Triplet = makeCardComboFromLevel(*i, 3);
+                    if ((myPosition == 0 && cardRemaining[1] >= 8 && cardRemaining[2] >= 8)
+                        || (myPosition > 0 && cardRemaining[0] >= 8)) {
+                        if (*i < 10) Triplet = makeCardComboFromLevel(*i, 3);
+                    }
+                    else Triplet = makeCardComboFromLevel(*i, 3);
                     break;
                 }
             }
+
+            // 如果因为三条过大没有找到，直接过
+            if (Triplet.cards.empty() && !levelCount.triplet.empty()) return CardCombo();
 
             // 如果找不到，使用无脑策略（无脑策略考虑能不能炸和火箭）
             if (Triplet.cards.empty()) {
                 auto naiveValid = findFirstValid_naive(begin, end);
                 // 如果找不到，农民乙不炸农民甲
-                if (myPosition == 2 && !((--whatTheyPlayed[1].end()) -> empty()))
+                if (myPosition == 2 && !(whatTheyPlayed[1].rbegin() -> empty()))
                     return CardCombo();
                 return naiveValid;
             }
@@ -1428,8 +1485,8 @@ struct CardCombo
             }
             // 看看有没有炸弹
             // 农民乙不炸农民甲
-            if (!levelCount.bomb.empty() &&
-                    !(myPosition == 2 && !((--whatTheyPlayed[1].end()) -> empty())))
+            if (!levelCount.bomb.empty()
+                && !(myPosition == 2 && !(whatTheyPlayed[1].rbegin() -> empty())))
                 return makeCardComboFromLevel(levelCount.bomb[0], 4);
 
             // 如果再搜索不到，就要拆炸弹了，不行，直接过
@@ -1441,8 +1498,9 @@ struct CardCombo
 
         // 农民乙不炸农民甲的牌
         if (myPosition == 2
-            && !((--whatTheyPlayed[1].end()) -> empty())
-            && (naiveValid.comboType == CardComboType::BOMB || naiveValid.comboType == CardComboType::ROCKET)) {
+            && !(whatTheyPlayed[1].rbegin() -> empty())
+            && (naiveValid.comboType == CardComboType::BOMB
+                || naiveValid.comboType == CardComboType::ROCKET)) {
             return CardCombo();
         }
         return naiveValid;
